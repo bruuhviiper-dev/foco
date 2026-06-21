@@ -22,6 +22,7 @@ class AppState extends ChangeNotifier {
   static const _kReminderHour = 'reminder_hour';
   static const _kReminderMin = 'reminder_min';
   static const _kSignature = 'custom_signature';
+  static const _kTempPro = 'temp_pro_until';
 
   static const String pRemoveAds = 'remove_ads';
   static const String pWatermark = 'remove_watermark';
@@ -38,6 +39,7 @@ class AppState extends ChangeNotifier {
   int _reminderHour = 8;
   int _reminderMin = 0;
   String _customSignature = '';
+  DateTime? _tempProUntil;
 
   // ----- básico -----
   Set<String> get favorites => Set.unmodifiable(_favorites);
@@ -52,6 +54,14 @@ class AppState extends ChangeNotifier {
   int get reminderMin => _reminderMin;
 
   // ----- assinatura personalizada (premium) -----
+  bool get hasTemporaryPro =>
+      _tempProUntil != null && _tempProUntil!.isAfter(DateTime.now());
+  void grantTemporaryPro(Duration d) {
+    _tempProUntil = DateTime.now().add(d);
+    _prefs.setInt(_kTempPro, _tempProUntil!.millisecondsSinceEpoch);
+    notifyListeners();
+  }
+
   String get customSignature => _customSignature;
 
   void setCustomSignature(String value) {
@@ -122,6 +132,8 @@ class AppState extends ChangeNotifier {
     _reminderHour = _prefs.getInt(_kReminderHour) ?? 8;
     _reminderMin = _prefs.getInt(_kReminderMin) ?? 0;
     _customSignature = _prefs.getString(_kSignature) ?? '';
+    final tp = _prefs.getInt(_kTempPro);
+    _tempProUntil = tp != null ? DateTime.fromMillisecondsSinceEpoch(tp) : null;
   }
 
   void toggleFavorite(String id) {

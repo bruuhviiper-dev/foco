@@ -74,10 +74,57 @@ class _CreateScreenState extends State<CreateScreen> {
     super.dispose();
   }
 
-  bool _pro(AppState s) => s.isPremium || s.ownsExclusivePack;
+  bool _pro(AppState s) =>
+      s.isPremium || s.ownsExclusivePack || s.hasTemporaryPro;
 
-  void _toStore() => Navigator.of(context)
-      .push(MaterialPageRoute(builder: (_) => const StoreScreen()));
+  /// Recurso PRO: oferece comprar OU assistir anúncio (libera 24h).
+  void _unlock(AppState s) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 2),
+              child: Text('Recurso PRO 💎',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                  'Desbloqueie com o Premium ou assista a um anúncio e use por 24h.',
+                  textAlign: TextAlign.center),
+            ),
+            ListTile(
+              leading: const Icon(Icons.play_circle_fill_rounded,
+                  color: Color(0xFF16A34A)),
+              title: const Text('Assistir anúncio e liberar 24h'),
+              onTap: () {
+                Navigator.pop(ctx);
+                s.grantTemporaryPro(const Duration(hours: 24));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('PRO liberado por 24h! Aproveite 🎉')));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.workspace_premium_rounded,
+                  color: Color(0xFFD9A406)),
+              title: const Text('Comprar Premium'),
+              subtitle: const Text('Desbloqueia pra sempre'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const StoreScreen()));
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<Uint8List?> _capture() async {
     final boundary =
@@ -263,7 +310,7 @@ class _CreateScreenState extends State<CreateScreen> {
                   label: Text(_formats[i].label),
                   selected: _format == i,
                   onSelected: (_) =>
-                      (i > 0 && !pro) ? _toStore() : setState(() => _format = i),
+                      (i > 0 && !pro) ? _unlock(state) : setState(() => _format = i),
                 ),
             ],
           ),
@@ -290,7 +337,7 @@ class _CreateScreenState extends State<CreateScreen> {
                       ? Theme.of(context).colorScheme.primaryContainer
                       : null,
                   onPressed: () =>
-                      locked ? _toStore() : setState(() => _font = i),
+                      locked ? _unlock(state) : setState(() => _font = i),
                 );
               },
             ),
@@ -305,7 +352,7 @@ class _CreateScreenState extends State<CreateScreen> {
                   padding: const EdgeInsets.only(right: 10),
                   child: GestureDetector(
                     onTap: () => (i > 1 && !pro)
-                        ? _toStore()
+                        ? _unlock(state)
                         : setState(() => _color = i),
                     child: Container(
                       width: 34,
@@ -342,7 +389,7 @@ class _CreateScreenState extends State<CreateScreen> {
                 final locked = b.premium && !pro;
                 return GestureDetector(
                   onTap: () => locked
-                      ? _toStore()
+                      ? _unlock(state)
                       : setState(() {
                           _bg = i;
                           _photoPath = null;
@@ -374,7 +421,7 @@ class _CreateScreenState extends State<CreateScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => pro ? _pickPhoto() : _toStore(),
+                  onPressed: () => pro ? _pickPhoto() : _unlock(state),
                   icon: Icon(pro
                       ? Icons.add_photo_alternate_rounded
                       : Icons.lock_rounded),
@@ -384,7 +431,7 @@ class _CreateScreenState extends State<CreateScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => pro ? _editSignature(state) : _toStore(),
+                  onPressed: () => pro ? _editSignature(state) : _unlock(state),
                   icon: Icon(pro ? Icons.draw_rounded : Icons.lock_rounded),
                   label: const Text('Assinatura'),
                 ),
@@ -404,7 +451,7 @@ class _CreateScreenState extends State<CreateScreen> {
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
-            onPressed: _busy ? null : () => pro ? _saveGallery() : _toStore(),
+            onPressed: _busy ? null : () => pro ? _saveGallery() : _unlock(state),
             icon: Icon(pro ? Icons.download_rounded : Icons.lock_rounded),
             label: const Text('Salvar na galeria (HD)'),
           ),
