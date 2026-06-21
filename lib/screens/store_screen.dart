@@ -34,12 +34,32 @@ class StoreScreen extends StatelessWidget {
         children: [
           if (state.isPremium)
             _Badge()
-          else
+          else ...[
             _BundleCard(
               price:
                   PurchaseService.instance.priceOf(StoreProducts.premiumBundle.id),
               onBuy: () => _buy(context, StoreProducts.premiumBundle.id),
             ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.movie_filter_rounded, size: 30),
+                title: const Text('Liberar tudo por 24h',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: const Text('Assistindo um anúncio rápido (grátis)'),
+                trailing: const Icon(Icons.play_circle_fill_rounded, size: 30),
+                onTap: () {
+                  context
+                      .read<AppState>()
+                      .grantTemporaryPro(const Duration(hours: 24));
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(const SnackBar(
+                        content: Text('Tudo liberado por 24h! 🎉')));
+                },
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           if (!state.isSubscriber) ...[
             const _SectionTitle('Assinatura'),

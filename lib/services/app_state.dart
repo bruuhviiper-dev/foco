@@ -82,7 +82,8 @@ class AppState extends ChangeNotifier {
 
   // ----- premium / compras -----
   bool get isSubscriber => _subscriptions.isNotEmpty;
-  bool get hasBundle => _entitlements.contains(pBundle) || isSubscriber;
+  bool get hasBundle =>
+      _entitlements.contains(pBundle) || isSubscriber || hasTemporaryPro;
   bool get isPremium => hasBundle;
 
   bool ownsProduct(String id) =>
