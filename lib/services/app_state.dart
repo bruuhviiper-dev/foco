@@ -21,6 +21,7 @@ class AppState extends ChangeNotifier {
   static const _kReminderOn = 'reminder_on';
   static const _kReminderHour = 'reminder_hour';
   static const _kReminderMin = 'reminder_min';
+  static const _kSignature = 'custom_signature';
 
   static const String pRemoveAds = 'remove_ads';
   static const String pWatermark = 'remove_watermark';
@@ -36,6 +37,7 @@ class AppState extends ChangeNotifier {
   bool _reminderOn = false;
   int _reminderHour = 8;
   int _reminderMin = 0;
+  String _customSignature = '';
 
   // ----- básico -----
   Set<String> get favorites => Set.unmodifiable(_favorites);
@@ -48,6 +50,15 @@ class AppState extends ChangeNotifier {
   bool get reminderOn => _reminderOn;
   int get reminderHour => _reminderHour;
   int get reminderMin => _reminderMin;
+
+  // ----- assinatura personalizada (premium) -----
+  String get customSignature => _customSignature;
+
+  void setCustomSignature(String value) {
+    _customSignature = value.trim();
+    _prefs.setString(_kSignature, _customSignature);
+    notifyListeners();
+  }
 
   void setReminder({required bool on, int? hour, int? minute}) {
     _reminderOn = on;
@@ -110,6 +121,7 @@ class AppState extends ChangeNotifier {
     _reminderOn = _prefs.getBool(_kReminderOn) ?? false;
     _reminderHour = _prefs.getInt(_kReminderHour) ?? 8;
     _reminderMin = _prefs.getInt(_kReminderMin) ?? 0;
+    _customSignature = _prefs.getString(_kSignature) ?? '';
   }
 
   void toggleFavorite(String id) {
