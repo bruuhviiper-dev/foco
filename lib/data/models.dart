@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_info.dart';
+
 /// Uma mensagem (texto + rótulo opcional, ex.: "Bom dia").
 class Verse {
   const Verse(this.text, [this.reference = '']);
@@ -9,10 +11,11 @@ class Verse {
 
   String get id => '$reference::${text.hashCode}';
 
-  /// Texto pronto pra compartilhar (com a assinatura do app — tráfego orgânico).
-  String get shareText => reference.isEmpty
-      ? '$text\n\n🎯 Foco em Foco'
-      : '$text\n— $reference\n\n🎯 Foco em Foco';
+  /// Texto pronto pra compartilhar (assinatura + link do app = tráfego orgânico).
+  String get shareText {
+    final base = reference.isEmpty ? text : '$text\n— $reference';
+    return '$base\n\n🎯 ${AppInfo.appName}\n${AppInfo.shareFooter}';
+  }
 }
 
 /// Categoria de versículos (ex.: Fé, Esperança, Amor...).
