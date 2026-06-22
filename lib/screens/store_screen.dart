@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/app_palettes.dart';
 import '../data/app_theme.dart';
+import '../services/ads_service.dart';
 import '../services/app_state.dart';
 import '../services/purchase_service.dart';
 import '../services/store_products.dart';
@@ -48,14 +49,19 @@ class StoreScreen extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w800)),
                 subtitle: const Text('Assistindo um anúncio rápido (grátis)'),
                 trailing: const Icon(Icons.play_circle_fill_rounded, size: 30),
-                onTap: () {
-                  context
-                      .read<AppState>()
-                      .grantTemporaryPro(const Duration(hours: 24));
+                onTap: () async {
+                  final shown = await AdsService.instance.showRewarded(() {
+                    context
+                        .read<AppState>()
+                        .grantTemporaryPro(const Duration(hours: 24));
+                  });
+                  if (!context.mounted) return;
                   ScaffoldMessenger.of(context)
                     ..hideCurrentSnackBar()
-                    ..showSnackBar(const SnackBar(
-                        content: Text('Tudo liberado por 24h! 🎉')));
+                    ..showSnackBar(SnackBar(
+                        content: Text(shown
+                            ? 'Aproveite! Tudo liberado por 24h. 🎉'
+                            : 'Anúncio carregando, tente de novo em instantes.')));
                 },
               ),
             ),

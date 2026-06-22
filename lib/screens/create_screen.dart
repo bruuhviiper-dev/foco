@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../data/app_theme.dart';
 import '../data/story_backgrounds.dart';
+import '../services/ads_service.dart';
 import '../services/app_state.dart';
 import 'store_screen.dart';
 
@@ -101,11 +102,15 @@ class _CreateScreenState extends State<CreateScreen> {
               leading: const Icon(Icons.play_circle_fill_rounded,
                   color: Color(0xFF16A34A)),
               title: const Text('Assistir anúncio e liberar 24h'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(ctx);
-                s.grantTemporaryPro(const Duration(hours: 24));
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('PRO liberado por 24h! Aproveite 🎉')));
+                final shown = await AdsService.instance.showRewarded(
+                    () => s.grantTemporaryPro(const Duration(hours: 24)));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(shown
+                        ? 'PRO liberado por 24h! Aproveite 🎉'
+                        : 'Anúncio carregando, tente de novo em instantes.')));
               },
             ),
             ListTile(
