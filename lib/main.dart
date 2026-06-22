@@ -84,7 +84,7 @@ class _HomeShellState extends State<HomeShell> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: (i) { setState(() => _index = i); if (!context.read<AppState>().adsRemoved) AdsService.instance.registerActionAndMaybeShow(); },
         destinations: const [
           NavigationDestination(
               icon: Icon(Icons.home_outlined),

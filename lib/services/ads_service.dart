@@ -1,69 +1,209 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/widgets.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-/// Serviço de anúncios (AdMob). Usa os IDs de TESTE do Google — na publicação,
-/// troque `_rewardedUnit` (e o APPLICATION_ID no AndroidManifest) pelos seus.
-class AdsService {
+/// AdMob completo (Android/iOS): banner, intersticial, app-open e premiado.
+/// Usa IDs de TESTE (fase de testes). Na publicação, troque `_useTestAds` para
+/// false e preencha os IDs reais. NUNCA clique nos próprios anúncios reais.
+class AdsService with WidgetsBindingObserver {
   AdsService._();
   static final AdsService instance = AdsService._();
 
-  // Unidade de anúncio PREMIADO de TESTE (oficial do Google).
-  static const String _rewardedTestUnit =
-      'ca-app-pub-3940256099942544/5224354917';
+  static const bool _useTestAds = true;
 
-  RewardedAd? _rewarded;
-  bool _loading = false;
-  bool _ready = false;
+  // IDs de TESTE oficiais do Google
+  static const _testBanner = 'ca-app-pub-3940256099942544/6300978111';
+  static const _testInterstitial = 'ca-app-pub-3940256099942544/1033173712';
+  static const _testRewarded = 'ca-app-pub-3940256099942544/5224354917';
+  static const _testAppOpen = 'ca-app-pub-3940256099942544/9257395921';
+
+  // IDs reais (preencher na publicação)
+  static const _realBanner = 'ca-app-pub-0000000000000000/0000000000';
+  static const _realInterstitial = 'ca-app-pub-0000000000000000/0000000000';
+  static const _realRewarded = 'ca-app-pub-0000000000000000/0000000000';
+  static const _realAppOpen = 'ca-app-pub-0000000000000000/0000000000';
+  static bool _ph(String id) => id.contains('0000000000');
+
+  bool _initialized = false;
+  bool get _supported => Platform.isAndroid || Platform.isIOS;
+
+  /// Setado pelo banner (lê o AppState): usuário pagante não vê anúncios.
+  bool adsRemoved = false;
+
+  InterstitialAd? _interstitial;
+  bool _loadingInterstitial = false;
+  AppOpenAd? _appOpenAd;
+  DateTime? _lastAppOpenShown;
+  bool _showingFullScreenAd = false;
+
+  static const int interstitialEvery = 8;
+  int _actionsSinceLastAd = 0;
+  DateTime? _lastInterstitialShown;
+
+  String get bannerUnitId =>
+      (_useTestAds || _ph(_realBanner)) ? _testBanner : _realBanner;
+  String get _interstitialUnitId =>
+      (_useTestAds || _ph(_realInterstitial)) ? _testInterstitial : _realInterstitial;
+  String get _rewardedUnitId =>
+      (_useTestAds || _ph(_realRewarded)) ? _testRewarded : _realRewarded;
+  String get _appOpenUnitId =>
+      (_useTestAds || _ph(_realAppOpen)) ? _testAppOpen : _realAppOpen;
 
   void init() {
+    if (_initialized || !_supported) return;
+    _initialized = true;
     MobileAds.instance.initialize();
-    _load();
+    WidgetsBinding.instance.addObserver(this);
+    _preloadInterstitial();
+    _loadAppOpen();
   }
 
-  void _load() {
-    if (_loading || _rewarded != null) return;
-    _loading = true;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) maybeShowAppOpen();
+  }
+
+  // ----- Premiado -----
+  Future<bool> showRewarded(void Function() onReward) async {
+    if (!_supported) {
+      onReward();
+      return true;
+    }
+    final completer = Completer<bool>();
     RewardedAd.load(
-      adUnitId: _rewardedTestUnit,
+      adUnitId: _rewardedUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
-          _rewarded = ad;
-          _ready = true;
-          _loading = false;
+          var earned = false;
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdShowedFullScreenContent: (_) => _showingFullScreenAd = true,
+            onAdDismissedFullScreenContent: (ad) {
+              _showingFullScreenAd = false;
+              ad.dispose();
+              if (!completer.isCompleted) completer.complete(earned);
+            },
+            onAdFailedToShowFullScreenContent: (ad, err) {
+              _showingFullScreenAd = false;
+              ad.dispose();
+              if (!completer.isCompleted) completer.complete(false);
+            },
+          );
+          ad.show(onUserEarnedReward: (ad, reward) {
+            earned = true;
+            onReward();
+          });
         },
         onAdFailedToLoad: (err) {
-          _rewarded = null;
-          _ready = false;
-          _loading = false;
+          debugPrint('Rewarded falhou: $err');
+          if (!completer.isCompleted) completer.complete(false);
+        },
+      ),
+    );
+    return completer.future;
+  }
+
+  // ----- Intersticial -----
+  void _preloadInterstitial() {
+    if (!_supported || _loadingInterstitial || _interstitial != null) return;
+    _loadingInterstitial = true;
+    InterstitialAd.load(
+      adUnitId: _interstitialUnitId,
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _interstitial = ad;
+          _loadingInterstitial = false;
+        },
+        onAdFailedToLoad: (err) {
+          _interstitial = null;
+          _loadingInterstitial = false;
         },
       ),
     );
   }
 
-  bool get isReady => _ready && _rewarded != null;
-
-  /// Mostra o anúncio premiado. Chama [onReward] SÓ quando o usuário
-  /// realmente assistir e ganhar a recompensa. Retorna false se não havia
-  /// anúncio carregado (e dispara um novo carregamento).
-  Future<bool> showRewarded(void Function() onReward) async {
-    final ad = _rewarded;
-    if (ad == null) {
-      _load();
-      return false;
+  /// Conta uma ação relevante e exibe o intersticial ao atingir o limite
+  /// (intervalo mínimo de 60s). Não exibe pra quem removeu anúncios.
+  void registerActionAndMaybeShow() {
+    if (!_supported || adsRemoved || _showingFullScreenAd) return;
+    _actionsSinceLastAd++;
+    if (_actionsSinceLastAd < interstitialEvery) return;
+    final now = DateTime.now();
+    if (_lastInterstitialShown != null &&
+        now.difference(_lastInterstitialShown!) < const Duration(seconds: 60)) {
+      return;
     }
-    _rewarded = null;
-    _ready = false;
+    final ad = _interstitial;
+    if (ad == null) {
+      _preloadInterstitial();
+      return;
+    }
     ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdShowedFullScreenContent: (_) => _showingFullScreenAd = true,
       onAdDismissedFullScreenContent: (ad) {
+        _showingFullScreenAd = false;
         ad.dispose();
-        _load();
+        _interstitial = null;
+        _preloadInterstitial();
       },
       onAdFailedToShowFullScreenContent: (ad, err) {
+        _showingFullScreenAd = false;
         ad.dispose();
-        _load();
+        _interstitial = null;
+        _preloadInterstitial();
       },
     );
-    await ad.show(onUserEarnedReward: (ad, reward) => onReward());
-    return true;
+    ad.show();
+    _interstitial = null;
+    _actionsSinceLastAd = 0;
+    _lastInterstitialShown = now;
+  }
+
+  // ----- App Open -----
+  void _loadAppOpen() {
+    if (!_supported || _appOpenAd != null) return;
+    AppOpenAd.load(
+      adUnitId: _appOpenUnitId,
+      request: const AdRequest(),
+      adLoadCallback: AppOpenAdLoadCallback(
+        onAdLoaded: (ad) => _appOpenAd = ad,
+        onAdFailedToLoad: (err) => _appOpenAd = null,
+      ),
+    );
+  }
+
+  void maybeShowAppOpen() {
+    if (!_supported || adsRemoved || _showingFullScreenAd) return;
+    final now = DateTime.now();
+    if (_lastAppOpenShown != null &&
+        now.difference(_lastAppOpenShown!) < const Duration(minutes: 4)) {
+      return;
+    }
+    final ad = _appOpenAd;
+    if (ad == null) {
+      _loadAppOpen();
+      return;
+    }
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdShowedFullScreenContent: (_) => _showingFullScreenAd = true,
+      onAdDismissedFullScreenContent: (ad) {
+        _showingFullScreenAd = false;
+        ad.dispose();
+        _appOpenAd = null;
+        _loadAppOpen();
+      },
+      onAdFailedToShowFullScreenContent: (ad, err) {
+        _showingFullScreenAd = false;
+        ad.dispose();
+        _appOpenAd = null;
+        _loadAppOpen();
+      },
+    );
+    ad.show();
+    _appOpenAd = null;
+    _lastAppOpenShown = now;
   }
 }
